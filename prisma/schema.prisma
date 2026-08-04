@@ -1,0 +1,556 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id         String   @id @default(uuid())
+  username   String   @unique
+  email      String   @unique
+  password   String
+  role       Role     @default(STAFF)
+  isVerified Boolean  @default(false)
+  createdAt  DateTime @default(now())
+}
+
+model Student {
+  id                     String     @id @default(uuid())
+  student_image          String     @default("/uploads/default.jpg")
+  fullname               String
+  gender                 Gender
+  dob                    DateTime   @db.Date
+  parentName             String
+  guardianName           String?
+  dress                  Boolean
+  books                  Boolean
+  hostel                 Boolean
+  citizenship_number     String
+  blood_group            BloodGroup
+  permanent_address      String
+  temporary_address      String
+  contact_number_student String
+  contact_number_parent  String
+  height                 String
+  heightUnit             String     @default("cm") // cm, m, ft, inches
+  weight                 String
+  weightUnit             String     @default("kg") // kg, lb
+  qualifications         String[]
+  email                  String     @unique
+  images                 String[]
+  isSelected             Boolean    @default(false)
+  selectedAt             DateTime?
+  createdAt              DateTime   @default(now())
+
+  // 🔗 A student can have multiple assigned subcategories
+  studentCategories     StudentCategory[]
+  // 🔗 A student can have multiple inventory issuances
+  issuances             StudentIssuance[]
+  // 🔗 A student can have multiple hostel allocations
+  hostelAllocations     HostelAllocation[]
+  // 🔗 A student can be selected for multiple subcategories
+  subCategorySelections SubCategorySelection[]
+}
+
+model Category {
+  id            String        @id @default(uuid())
+  name          String        @unique
+  description   String?
+  subCategories SubCategory[]
+  createdAt     DateTime      @default(now())
+}
+
+model SubCategory {
+  id         String   @id @default(uuid())
+  name       String
+  fee        Decimal  @db.Decimal(10, 2)
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id])
+  createdAt  DateTime @default(now())
+
+  // 🔗 Many students can have this subcategory
+  studentCategories     StudentCategory[]
+  // 🔗 Many students can be selected for this subcategory
+  subCategorySelections SubCategorySelection[]
+
+  @@unique([name, categoryId])
+}
+
+model StudentCategory {
+  id             String    @id @default(uuid())
+  studentId      String
+  subCategoryId  String
+  discountAmount Decimal   @default(0) @db.Decimal(10, 2) // Discount for this subcategory
+  finalFee       Decimal   @db.Decimal(10, 2) // Fee after discount
+  totalPaid      Decimal   @default(0) @db.Decimal(10, 2) // Total amount paid
+  assignedAt     DateTime  @default(now())
+  assignedDate   DateTime  @default(now()) // Date when category was assigned (user-selected)
+  durationMonths Int? // Duration in months for this assignment
+  isActive       Boolean   @default(true) // Track if student is still in this category
+  checkedOutAt   DateTime? // When student was checked out from this category
+  notes          String? // Optional notes for this assignment
+
+  // Relation fields
+  student     Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subCategory SubCategory       @relation(fields: [subCategoryId], references: [id], onDelete: Cascade)
+  payments    CategoryPayment[]
+
+  // Allow multiple allocations to same subcategory (for re-allocation tracking)
+  @@index([studentId])
+  @@index([subCategoryId])
+  @@index([isActive])
+}
+
+model CategoryPayment {
+  id                String        @id @default(uuid())
+  studentCategoryId String
+  amount            Decimal       @db.Decimal(10, 2)
+  paymentDate       DateTime      @default(now())
+  paymentMethod     PaymentMethod
+  referenceNumber   String?
+  notes             String?
+  createdBy         String
+  settlementId      String?       // Link to Settlement when payment is settled
+  createdAt         DateTime      @default(now())
+
+  // Relations
+  studentCategory StudentCategory @relation(fields: [studentCategoryId], references: [id], onDelete: Cascade)
+  settlement      Settlement?     @relation(fields: [settlementId], references: [id], onDelete: SetNull)
+
+  @@index([settlementId])
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  CHEQUE
+  ONLINE
+  CARD
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  HOSTEL_ADMIN
+  STAFF
+}
+
+enum Gender {
+  MALE
+  FEMALE
+}
+
+enum BloodGroup {
+  A_POSITIVE
+  A_NEGATIVE
+  B_POSITIVE
+  B_NEGATIVE
+  AB_POSITIVE
+  AB_NEGATIVE
+  O_POSITIVE
+  O_NEGATIVE
+}
+
+// Inventory Management Models
+
+model Vendor {
+  id            String   @id @default(uuid())
+  name          String
+  contactPerson String?
+  email         String?
+  phone         String
+  address       String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  items    VendorItem[]
+  orders   Order[]
+  payments VendorPayment[]
+}
+
+model VendorPayment {
+  id              String        @id @default(uuid())
+  vendorId        String
+  amount          Decimal       @db.Decimal(10, 2)
+  paymentDate     DateTime      @default(now())
+  paymentMethod   PaymentMethod
+  referenceNumber String?
+  notes           String?
+  createdBy       String
+  createdAt       DateTime      @default(now())
+
+  // Relations
+  vendor Vendor @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+}
+
+model InventoryCategory {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  isBilling   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  // Relations
+  items InventoryItem[]
+  bills InventoryBill[]
+}
+
+model InventoryItem {
+  id                String   @id @default(uuid())
+  name              String
+  description       String?
+  categoryId        String
+  sku               String   @unique
+  unit              String // e.g., "piece", "kg", "liter"
+  currentStock      Int      @default(0)
+  minStockThreshold Int      @default(10)
+  unitPrice         Decimal? @db.Decimal(10, 2)
+  isActive          Boolean  @default(true)
+  isDeleted         Boolean  @default(false)
+  deletedAt         DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([isDeleted])
+
+  // Relations
+  category     InventoryCategory  @relation(fields: [categoryId], references: [id])
+  vendors      VendorItem[]
+  orderItems   OrderItem[]
+  transactions StockTransaction[]
+  issuances    StudentIssuance[]
+}
+
+model VendorItem {
+  id        String   @id @default(uuid())
+  vendorId  String
+  itemId    String
+  createdAt DateTime @default(now())
+
+  // Relations
+  vendor Vendor        @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  item   InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([vendorId, itemId])
+}
+
+model Order {
+  id               String      @id @default(uuid())
+  orderNumber      String      @unique
+  vendorId         String
+  orderDate        DateTime    @default(now())
+  expectedDelivery DateTime?
+  status           OrderStatus @default(PENDING)
+  totalAmount      Decimal     @db.Decimal(10, 2)
+  notes            String?
+  createdBy        String
+  receivedBy       String?
+  receivedAt       DateTime?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  isDeleted        Boolean     @default(false)
+  deletedAt        DateTime?
+
+  // Relations
+  vendor Vendor      @relation(fields: [vendorId], references: [id])
+  items  OrderItem[]
+
+  @@index([isDeleted])
+}
+
+model OrderItem {
+  id          String  @id @default(uuid())
+  orderId     String
+  itemId      String
+  quantity    Int
+  unitPrice   Decimal @db.Decimal(10, 2)
+  receivedQty Int     @default(0)
+
+  // Relations
+  order Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  item  InventoryItem @relation(fields: [itemId], references: [id])
+}
+
+model StockTransaction {
+  id              String          @id @default(uuid())
+  itemId          String
+  transactionType TransactionType
+  quantity        Int
+  balanceAfter    Int
+  reason          String?
+  referenceId     String? // Links to Order, Issuance, etc.
+  referenceType   String? // "ORDER", "ISSUANCE", "ADJUSTMENT"
+  performedBy     String
+  transactionDate DateTime        @default(now())
+  notes           String?
+
+  // Relations
+  item InventoryItem @relation(fields: [itemId], references: [id])
+}
+
+model StudentIssuance {
+  id           String         @id @default(uuid())
+  studentId    String
+  itemId       String
+  quantity     Int
+  unitPrice    Decimal        @default(0) @db.Decimal(10, 2) // Price per unit at time of issuance
+  totalAmount  Decimal        @default(0) @db.Decimal(10, 2) // Total amount = quantity * unitPrice
+  totalPaid    Decimal        @default(0) @db.Decimal(10, 2) // Total amount paid
+  issuedDate   DateTime       @default(now())
+  returnedDate DateTime?
+  returnedQty  Int            @default(0)
+  status       IssuanceStatus @default(ISSUED)
+  issuedBy     String
+  notes        String?
+  isDeleted    Boolean        @default(false)
+  deletedAt    DateTime?
+  createdAt    DateTime       @default(now())
+
+  @@index([isDeleted])
+
+  // Relations
+  student  Student           @relation(fields: [studentId], references: [id])
+  item     InventoryItem     @relation(fields: [itemId], references: [id])
+  payments IssuancePayment[]
+}
+
+model IssuancePayment {
+  id              String        @id @default(uuid())
+  issuanceId      String
+  amount          Decimal       @db.Decimal(10, 2)
+  paymentDate     DateTime      @default(now())
+  paymentMethod   PaymentMethod
+  referenceNumber String?
+  notes           String?
+  createdBy       String
+  settlementId    String?       // Link to Settlement when payment is settled
+  createdAt       DateTime      @default(now())
+
+  // Relations
+  issuance   StudentIssuance @relation(fields: [issuanceId], references: [id], onDelete: Cascade)
+  settlement Settlement?     @relation(fields: [settlementId], references: [id], onDelete: SetNull)
+
+  @@index([issuanceId])
+  @@index([paymentDate])
+  @@index([settlementId])
+}
+
+model LedgerEntry {
+  id              String        @id @default(uuid())
+  type            LedgerType    // INCOME, EXPENSE
+  category        String        // INVENTORY_ISSUANCE, HOSTEL_PAYMENT, CATEGORY_PAYMENT, etc.
+  description     String
+  amount          Decimal       @db.Decimal(10, 2)
+  paymentMethod   PaymentMethod @default(CASH)
+  referenceNumber String?
+  referenceId     String?       // Links to issuance, payment, etc.
+  referenceType   String?       // ISSUANCE_PAYMENT, HOSTEL_PAYMENT, etc.
+  recordedBy      String
+  recordedDate    DateTime      @default(now())
+  notes           String?
+  createdAt       DateTime      @default(now())
+
+  @@index([type])
+  @@index([category])
+  @@index([recordedDate])
+  @@index([referenceId])
+}
+
+enum OrderStatus {
+  PENDING
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CANCELLED
+}
+
+enum TransactionType {
+  STOCK_IN
+  STOCK_OUT
+  ADJUSTMENT
+  RETURN
+}
+
+enum IssuanceStatus {
+  ISSUED
+  PARTIALLY_RETURNED
+  RETURNED
+}
+
+enum LedgerType {
+  INCOME
+  EXPENSE
+}
+
+// Hostel Management Models
+
+model HostelRoom {
+  id          String   @id @default(uuid())
+  roomNumber  String   @unique
+  capacity    Int
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  beds HostelBed[]
+
+  @@index([roomNumber])
+}
+
+model HostelBed {
+  id          String    @id @default(uuid())
+  roomId      String
+  bedNumber   String
+  pricePerDay Decimal   @db.Decimal(10, 2) // Required price per day
+  status      BedStatus @default(AVAILABLE)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  room        HostelRoom         @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  allocations HostelAllocation[]
+
+  @@unique([roomId, bedNumber])
+  @@index([roomId])
+  @@index([status])
+}
+
+model HostelAllocation {
+  id               String    @id @default(uuid())
+  studentId        String
+  roomId           String
+  bedId            String
+  allocationDate   DateTime  @default(now())
+  deallocationDate DateTime?
+  paidUntil        DateTime
+  creditBalance    Decimal   @default(0) @db.Decimal(10, 2) // Leftover balance from partial payments
+  isActive         Boolean   @default(true)
+  notes            String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  // Relations
+  student  Student         @relation(fields: [studentId], references: [id])
+  bed      HostelBed       @relation(fields: [bedId], references: [id])
+  payments HostelPayment[]
+
+  @@index([studentId])
+  @@index([bedId])
+  @@index([isActive])
+  @@index([allocationDate])
+}
+
+model HostelPayment {
+  id               String        @id @default(uuid())
+  allocationId     String
+  amount           Decimal       @db.Decimal(10, 2)
+  paymentDate      DateTime      @default(now())
+  daysPurchased    Int
+  updatedPaidUntil DateTime
+  paymentMethod    PaymentMethod @default(CASH)
+  referenceNumber  String?
+  notes            String?
+  createdBy        String
+  settlementId     String?       // Link to Settlement when payment is settled
+  createdAt        DateTime      @default(now())
+
+  // Relations
+  allocation HostelAllocation @relation(fields: [allocationId], references: [id], onDelete: Cascade)
+  settlement Settlement?      @relation(fields: [settlementId], references: [id], onDelete: SetNull)
+
+  @@index([allocationId])
+  @@index([paymentDate])
+  @@index([settlementId])
+}
+
+enum BedStatus {
+  AVAILABLE
+  ALLOCATED
+  INACTIVE
+}
+
+model InventoryBill {
+  id              String   @id @default(uuid())
+  categoryId      String
+  billingTitle    String
+  periodStartDate DateTime @db.Date
+  periodEndDate   DateTime @db.Date
+  amount          Decimal  @db.Decimal(10, 2)
+  units           Decimal? @db.Decimal(10, 2)
+  billDate        DateTime @db.Date
+  description     String?
+  createdBy       String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  category InventoryCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+}
+
+model SubCategorySelection {
+  id            String   @id @default(uuid())
+  studentId     String
+  subCategoryId String
+  selectedAt    DateTime @default(now())
+  createdAt     DateTime @default(now())
+
+  // Relations
+  student     Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subCategory SubCategory @relation(fields: [subCategoryId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, subCategoryId])
+  @@index([studentId])
+  @@index([subCategoryId])
+}
+
+model Settlement {
+  id              String        @id @default(uuid())
+  amount          Decimal       @db.Decimal(10, 2)
+  settlementDate  DateTime      @default(now())
+  paymentMethod   PaymentMethod @default(CASH)
+  referenceNumber String?
+  notes           String?
+  recordedBy      String        // User ID who recorded/triggered the settlement
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  // Relations to payments
+  categoryPayments CategoryPayment[]
+  issuancePayments IssuancePayment[]
+  hostelPayments   HostelPayment[]
+
+  @@index([settlementDate])
+  @@index([createdAt])
+  @@index([recordedBy])
+}
+
+model StudentDeletionRequest {
+  id              String    @id @default(uuid())
+  studentId       String
+  studentName     String
+  requestedBy     String    // User ID who requested deletion
+  requestedByRole Role      // Role of the user who requested
+  status          DeletionStatus @default(PENDING) // PENDING, APPROVED, REJECTED
+  reason          String?
+  approvedBy      String?   // Admin user ID who approved/rejected
+  approvedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([studentId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+enum DeletionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
