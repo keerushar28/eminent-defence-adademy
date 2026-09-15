@@ -26,6 +26,7 @@ const sourceColors: Record<string, string> = {
   HOSTEL: "bg-purple-100 text-purple-800",
   INVENTORY_BILL: "bg-green-100 text-green-800",
   INVENTORY_ISSUANCE: "bg-orange-100 text-orange-800",
+  EXTRA_INCOME: "bg-teal-100 text-teal-800",
 };
 
 const methodColors: Record<string, string> = {

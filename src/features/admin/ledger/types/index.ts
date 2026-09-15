@@ -1,4 +1,6 @@
-export type PaymentSource = "STUDENT_CATEGORY" | "HOSTEL" | "INVENTORY_ISSUANCE";
+export type PaymentSource = "STUDENT_CATEGORY" | "HOSTEL" | "INVENTORY_ISSUANCE" | "EXTRA_INCOME";
+
+export type PayerType = "INSIDER" | "OUTSIDER";
 export type PaymentMethod = "CASH" | "BANK_TRANSFER" | "CHEQUE" | "ONLINE" | "CARD";
 
 export interface LedgerEntry {
@@ -14,6 +16,8 @@ export interface LedgerEntry {
   description: string;
   referenceNumber?: string;
   notes?: string;
+  payerType?: PayerType;
+  payerContact?: string;
   createdAt: Date;
 }
 

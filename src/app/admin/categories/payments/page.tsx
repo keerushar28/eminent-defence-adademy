@@ -1,6 +1,13 @@
+"use client";
+
+import { useState } from "react";
 import PaymentDataTable from "@/features/admin/payments/components/payment-data-table";
+import { ExportButton } from "@/features/components/export-button";
+import type { ExportOptions } from "@/lib/export-utils";
 
 export default function PaymentPage() {
+    const [exportOptions, setExportOptions] = useState<ExportOptions | null>(null);
+
     return (
         <div className="p-4 flex flex-col gap-6">
             {/* Header */}
@@ -11,8 +18,12 @@ export default function PaymentPage() {
                         View all payments and add new payments for students
                     </p>
                 </div>
+                <ExportButton
+                    options={exportOptions ?? { fileName: "payments", columns: [], data: [] }}
+                    disabled={!exportOptions}
+                />
             </div>
-            <PaymentDataTable />
+            <PaymentDataTable onExportOptionsChange={setExportOptions} />
         </div>
     )
 }

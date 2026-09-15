@@ -3,6 +3,10 @@
 import { prisma } from "@/features/core/lib/prisma";
 import { LedgerEntry, LedgerSummary, DateRangeFilter, PaymentSource } from "../types";
 import { startOfMonth, endOfMonth, startOfYear, endOfYear, subMonths, subQuarters } from "date-fns";
+import {
+  calculatePendingDays,
+  calculatePendingAmount,
+} from "@/features/admin/hostel/lib/calculations";
 
 function getDateRange(filter: DateRangeFilter): { startDate?: Date; endDate?: Date } {
   const now = new Date();
@@ -135,6 +139,21 @@ export async function getLedgerEntries(
       },
     });
 
+    // Fetch extra / manual income entries from the ledger (only when no category/sub-category filter)
+    const extraIncomeEntries =
+      category || subCategory
+        ? []
+        : await prisma.ledgerEntry.findMany({
+            where: {
+              type: "INCOME",
+              category: "EXTRA_INCOME",
+              ...(dateFilter && { recordedDate: dateFilter }),
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              ...(paymentMethod && { paymentMethod: paymentMethod as any }),
+            },
+            orderBy: { recordedDate: "desc" },
+          });
+
     // Transform to ledger entries
     const entries: LedgerEntry[] = [];
 
@@ -210,6 +229,29 @@ export async function getLedgerEntries(
           referenceNumber: payment.referenceNumber || undefined,
           notes: payment.notes || undefined,
           createdAt: payment.createdAt,
+        });
+      }
+    });
+
+    extraIncomeEntries.forEach((entry) => {
+      if (!source || source === "EXTRA_INCOME") {
+        entries.push({
+          id: entry.id,
+          source: "EXTRA_INCOME",
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          paymentMethod: entry.paymentMethod as any,
+          amount: Number(entry.amount),
+          paymentDate: entry.recordedDate,
+          paidBy: entry.payerName || entry.description || "Unknown",
+          paidByEmail: entry.payerContact || undefined,
+          category: entry.category,
+          subCategory: entry.payerType || undefined,
+          description: entry.description,
+          referenceNumber: entry.referenceNumber || undefined,
+          notes: entry.notes || undefined,
+          payerType: (entry.payerType as "INSIDER" | "OUTSIDER") || undefined,
+          payerContact: entry.payerContact || undefined,
+          createdAt: entry.createdAt,
         });
       }
     });
@@ -303,39 +345,104 @@ export async function getLedgerSummary(
       },
     });
 
+    const extraIncomeEntries = (category || subCategory) ? [] : await prisma.ledgerEntry.findMany({
+      where: {
+        type: "INCOME",
+        category: "EXTRA_INCOME",
+        ...(dateFilter && { recordedDate: dateFilter }),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ...(paymentMethod && { paymentMethod: paymentMethod as any }),
+      },
+    });
+
     // Calculate totals
     const categoryIncome = categoryPayments.reduce((sum, p) => sum + Number(p.amount), 0);
     const hostelIncome = hostelPayments.reduce((sum, p) => sum + Number(p.amount), 0);
     const issuanceIncome = issuancePayments.reduce((sum, p) => sum + Number(p.amount), 0);
-    const totalIncome = categoryIncome + hostelIncome + issuanceIncome;
+    const extraIncome = extraIncomeEntries.reduce((sum, p) => sum + Number(p.amount), 0);
+    const totalIncome = categoryIncome + hostelIncome + issuanceIncome + extraIncome;
 
-    // Calculate pending (students with unpaid categories - including deallocated)
-    const unpaidCategories = await prisma.studentCategory.findMany({
-      where: {
-        ...(category || subCategory ? {
-          subCategory: {
-            ...(category && { category: { name: category } }),
-            ...(subCategory && { name: subCategory }),
-          },
-        } : {}),
-      },
-      include: {
-        subCategory: {
-          include: {
-            category: true,
-          },
-        },
-      },
-    });
+    // Calculate pending across ALL sources (Category, Hostel, Issuance)
+    const pendingIncludesCategories = !source || source === "STUDENT_CATEGORY";
+    const pendingIncludesHostel = !source || source === "HOSTEL";
+    const pendingIncludesIssuance = !source || source === "INVENTORY_ISSUANCE";
 
-    const totalPending = unpaidCategories.reduce((sum, sc) => {
+    // Category pending
+    const unpaidCategories = pendingIncludesCategories
+      ? await prisma.studentCategory.findMany({
+          where: {
+            ...(category || subCategory ? {
+              subCategory: {
+                ...(category && { category: { name: category } }),
+                ...(subCategory && { name: subCategory }),
+              },
+            } : {}),
+            // When a date range is selected, only count categories assigned within it
+            ...(dateFilter && { assignedDate: dateFilter }),
+          },
+        })
+      : [];
+
+    const categoryPending = unpaidCategories.reduce((sum, sc) => {
       const pending = Number(sc.finalFee) - Number(sc.totalPaid);
       return sum + (pending > 0 ? pending : 0);
     }, 0);
 
+    // Hostel pending — uses paidUntil-based calculation consistent with Student Ledger
+    const currentDate = new Date();
+    let hostelPending = 0;
+
+    if (pendingIncludesHostel && !(category || subCategory)) {
+      const activeAllocations = await prisma.hostelAllocation.findMany({
+        where: {
+          isActive: true,
+          ...(dateFilter && { allocationDate: dateFilter }),
+        },
+        include: {
+          bed: true,
+        },
+      });
+
+      for (const allocation of activeAllocations) {
+        const pricePerDay = Number(allocation.bed.pricePerDay) || 0;
+        const paidUntil = new Date(allocation.paidUntil);
+        const allocationDate = new Date(allocation.allocationDate);
+        const creditBalance = Number(allocation.creditBalance) || 0;
+
+        const pendingDays = calculatePendingDays(paidUntil, currentDate, allocationDate);
+        let pendingAmount = calculatePendingAmount(pendingDays, pricePerDay);
+        pendingAmount = Math.max(0, pendingAmount - creditBalance);
+
+        hostelPending += pendingAmount;
+      }
+    }
+
+    // Issuance pending — total amount minus what was paid
+    let issuancePending = 0;
+
+    if (pendingIncludesIssuance && !(category || subCategory)) {
+      const issuances = await prisma.studentIssuance.findMany({
+        where: {
+          status: { not: "RETURNED" },
+          ...(dateFilter && { issuedDate: dateFilter }),
+        },
+      });
+
+      for (const issuance of issuances) {
+        const totalAmount = issuance.quantity * (Number(issuance.unitPrice) || 0);
+        const totalPaid = Number(issuance.totalPaid) || 0;
+        const pending = totalAmount - totalPaid;
+        if (pending > 0) {
+          issuancePending += pending;
+        }
+      }
+    }
+
+    const totalPending = categoryPending + hostelPending + issuancePending;
+
     // Payment method breakdown
     const paymentMethodBreakdown: Record<string, number> = {};
-    [...categoryPayments, ...hostelPayments, ...issuancePayments].forEach((payment) => {
+    [...categoryPayments, ...hostelPayments, ...issuancePayments, ...extraIncomeEntries].forEach((payment) => {
       const method = payment.paymentMethod;
       paymentMethodBreakdown[method] = (paymentMethodBreakdown[method] || 0) + Number(payment.amount);
     });
@@ -345,6 +452,7 @@ export async function getLedgerSummary(
       STUDENT_CATEGORY: categoryIncome,
       HOSTEL: hostelIncome,
       INVENTORY_ISSUANCE: issuanceIncome,
+      EXTRA_INCOME: extraIncome,
     };
 
     // Category breakdown
@@ -355,6 +463,9 @@ export async function getLedgerSummary(
     });
     categoryBreakdown["Hostel"] = hostelIncome;
     categoryBreakdown["Inventory"] = issuanceIncome;
+    if (extraIncome > 0) {
+      categoryBreakdown["Extra Income"] = extraIncome;
+    }
 
     return {
       totalIncome,
@@ -374,7 +485,7 @@ export async function getPaymentMethods() {
 }
 
 export async function getPaymentSources() {
-  return ["STUDENT_CATEGORY", "HOSTEL", "INVENTORY_ISSUANCE"];
+  return ["STUDENT_CATEGORY", "HOSTEL", "INVENTORY_ISSUANCE", "EXTRA_INCOME"];
 }
 
 export async function getCategories() {

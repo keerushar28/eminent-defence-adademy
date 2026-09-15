@@ -92,7 +92,10 @@ export default function DateRangeFilter({ value, onChange, disabled }: DateRange
             <label className="text-sm font-medium text-muted-foreground mb-2 block">From</label>
             <NepaliDatePicker
               value={dateRange.from}
-              onChange={(date) => setDateRange({ ...dateRange, from: date instanceof Date ? date : undefined })}
+              onChange={(date) => {
+                const isDate = date instanceof Date || (date && typeof date === "object" && typeof (date as Date).getTime === "function");
+                setDateRange((prev) => ({ ...prev, from: isDate ? (date as Date) : prev.from }));
+              }}
               placeholder="Select start date"
               className="w-full"
               mode="single"
@@ -102,7 +105,10 @@ export default function DateRangeFilter({ value, onChange, disabled }: DateRange
             <label className="text-sm font-medium text-muted-foreground mb-2 block">To</label>
             <NepaliDatePicker
               value={dateRange.to}
-              onChange={(date) => setDateRange({ ...dateRange, to: date instanceof Date ? date : undefined })}
+              onChange={(date) => {
+                const isDate = date instanceof Date || (date && typeof date === "object" && typeof (date as Date).getTime === "function");
+                setDateRange((prev) => ({ ...prev, to: isDate ? (date as Date) : prev.to }));
+              }}
               placeholder="Select end date"
               className="w-full"
               mode="single"

@@ -19,8 +19,15 @@ import {
   DialogTitle,
 } from "@/features/core/components/dialog";
 import { formatNepaliDateFromDate } from "@/features/core/lib/nepali-date";
+import type { ExportOptions } from "@/lib/export-utils";
+import { ExportButton } from "@/features/components/export-button";
 
-export default function AllocationManagement() {
+interface AllocationManagementProps {
+  exportOptions?: ExportOptions | null;
+  onExportOptionsChange?: (options: ExportOptions) => void;
+}
+
+export default function AllocationManagement({ exportOptions, onExportOptionsChange }: AllocationManagementProps) {
   const [allocations, setAllocations] = useState<Allocation[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -194,10 +201,16 @@ export default function AllocationManagement() {
               Manage student bed allocations and deallocations
             </p>
           </div>
-          <Button onClick={handleAdd} size="sm" className="h-10 text-sm">
-            <Plus className="mr-2 h-4 w-4" />
-            Allocate Student
-          </Button>
+          <div className="flex items-center gap-2">
+            <ExportButton
+              options={exportOptions ?? { fileName: "allocations", columns: [], data: [] }}
+              disabled={!exportOptions}
+            />
+            <Button onClick={handleAdd} size="sm" className="h-10 text-sm">
+              <Plus className="mr-2 h-4 w-4" />
+              Allocate Student
+            </Button>
+          </div>
         </div>
 
         {/* Allocations List */}
@@ -205,6 +218,7 @@ export default function AllocationManagement() {
           allocations={allocations}
           onDeallocate={handleDeallocate}
           onDelete={handleDelete}
+          onExportOptionsChange={onExportOptionsChange}
         />
       </div>
 

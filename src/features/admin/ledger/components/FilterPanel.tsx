@@ -1,7 +1,12 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/features/core/components/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/features/core/components/card";
 import { Input } from "@/features/core/components/input";
 import { Button } from "@/features/core/components/button";
 import {
@@ -31,7 +36,12 @@ interface FilterPanelProps {
   paymentMethods: string[];
   paymentSources: string[];
   categories: Array<{ id: string; name: string }>;
-  subCategories: Array<{ id: string; name: string; categoryId: string; categoryName: string }>;
+  subCategories: Array<{
+    id: string;
+    name: string;
+    categoryId: string;
+    categoryName: string;
+  }>;
   onClearFilters: () => void;
   hasActiveFilters: boolean;
   loading?: boolean;
@@ -129,19 +139,16 @@ export default function FilterPanel({
           )}
         </div>
 
+        {/* Date Range — full width so custom pickers have room */}
+        <div>
+          <label className="text-sm font-medium text-muted-foreground mb-2 block">
+            Date Range
+          </label>
+          <DateRangeFilter value={dateRange} onChange={onDateRangeChange} />
+        </div>
+
         {/* Filter Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {/* Date Range */}
-          <div>
-            <label className="text-sm font-medium text-muted-foreground mb-2 block">
-              Date Range
-            </label>
-            <DateRangeFilter
-              value={dateRange}
-              onChange={onDateRangeChange}
-            />
-          </div>
-
           {/* Payment Method */}
           <div>
             <label className="text-sm font-medium text-muted-foreground mb-2 block">
@@ -170,7 +177,7 @@ export default function FilterPanel({
             <label className="text-sm font-medium text-muted-foreground mb-2 block">
               Income Source
             </label>
-            <Select value={sourceFilter} onValueChange={onSourceChange} >
+            <Select value={sourceFilter} onValueChange={onSourceChange}>
               <SelectTrigger className="border-border w-full">
                 <SelectValue placeholder="All Sources" />
               </SelectTrigger>
@@ -190,10 +197,7 @@ export default function FilterPanel({
             <label className="text-sm font-medium text-muted-foreground mb-2 block">
               Category
             </label>
-            <Select
-              value={categoryFilter}
-              onValueChange={onCategoryChange}
-            >
+            <Select value={categoryFilter} onValueChange={onCategoryChange}>
               <SelectTrigger className="border-border w-full">
                 <SelectValue placeholder="All Categories" />
               </SelectTrigger>
@@ -233,11 +237,7 @@ export default function FilterPanel({
 
           {/* Export Button */}
           <div className="flex items-end">
-            <Button
-              onClick={onExport}
-              variant="default"
-              className="w-full"
-            >
+            <Button onClick={onExport} variant="default" className="w-full">
               Export
             </Button>
           </div>

@@ -58,6 +58,11 @@ import Pagination from "@/features/core/components/shared/pagination"
 import { useSidebar } from "@/features/core/components/sidebar"
 import { cn } from "@/lib/utils"
 import { useSession } from "next-auth/react"
+import { type ExportOptions, type ExportColumn } from "@/lib/export-utils"
+
+interface PaymentDataTableProps {
+    onExportOptionsChange?: (options: ExportOptions) => void
+}
 
 interface Payment {
     id: string
@@ -375,7 +380,7 @@ function createColumns(userRole?: string, onPaymentDeleted?: (paymentId: string)
     ]
 }
 
-export default function PaymentDataTable() {
+export default function PaymentDataTable({ onExportOptionsChange }: PaymentDataTableProps) {
     const { state } = useSidebar()
     const { data: session } = useSession()
     const userRole = session?.user?.role
@@ -489,6 +494,71 @@ export default function PaymentDataTable() {
             columnVisibility,
         },
     })
+
+    // Compute export options from visible columns and payment data
+    useEffect(() => {
+        if (!onExportOptionsChange) return
+
+        const allExportColumns: ExportColumn[] = [
+            { header: "Payment Date", key: "paymentDate", width: 20 },
+            { header: "Student Name", key: "studentName", width: 25 },
+            { header: "Student Email", key: "studentEmail", width: 30 },
+            { header: "Category", key: "categoryName", width: 25 },
+            { header: "Sub-Category", key: "subCategoryName", width: 25 },
+            { header: "Amount", key: "amount", width: 15 },
+            { header: "Payment Method", key: "paymentMethod", width: 18 },
+            { header: "Reference Number", key: "referenceNumber", width: 20 },
+            { header: "Balance Status", key: "balanceStatus", width: 18 },
+            { header: "Remaining", key: "remaining", width: 15 },
+            { header: "Notes", key: "notes", width: 30 },
+        ]
+
+        const visibleColumns = allExportColumns.filter(
+            (col) => columnVisibility[col.key] !== false
+        )
+
+        const exportData = payments.map((payment) => {
+            const { finalFee, totalPaid } = payment.studentCategory
+            const remaining = finalFee - totalPaid
+
+            return {
+                paymentDate: formatNepaliDateFromDate(new Date(payment.paymentDate)),
+                studentName: payment.studentCategory.student.fullname,
+                studentEmail: payment.studentCategory.student.email,
+                categoryName: payment.studentCategory.subCategory.category.name,
+                subCategoryName: payment.studentCategory.subCategory.name,
+                amount: payment.amount,
+                paymentMethod: paymentMethodLabels[payment.paymentMethod] || payment.paymentMethod,
+                referenceNumber: payment.referenceNumber || "-",
+                balanceStatus: remaining <= 0 ? "Fully Paid" : totalPaid > 0 ? "Partial" : "Unpaid",
+                remaining: remaining > 0 ? remaining : 0,
+                notes: payment.notes || "-",
+            }
+        })
+
+        // Compute summary totals for Amount and Remaining
+        const totalAmount = exportData.reduce((sum, row) => sum + (row.amount as number), 0)
+        const totalRemaining = exportData.reduce((sum, row) => sum + (row.remaining as number), 0)
+
+        const visibleKeys = new Set(visibleColumns.map((col) => col.key))
+        const summaryRow: Record<string, string | number> = {}
+        if (visibleKeys.has("amount")) {
+            summaryRow.amount = totalAmount
+        }
+        if (visibleKeys.has("remaining")) {
+            summaryRow.remaining = totalRemaining
+        }
+
+        onExportOptionsChange({
+            fileName: "payments-data",
+            sheetName: "Payments",
+            title: "Payments Management",
+            subtitle: `Exported on ${new Date().toLocaleDateString()}`,
+            columns: visibleColumns,
+            data: exportData,
+            ...(Object.keys(summaryRow).length > 0 && { summaryRow }),
+        })
+    }, [payments, columnVisibility, onExportOptionsChange])
 
     const clearFilters = () => {
         setSelectedCategory("all")

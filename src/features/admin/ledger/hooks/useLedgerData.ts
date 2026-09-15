@@ -28,6 +28,7 @@ export function useLedgerData({ initialEntries = [], initialSummary }: UseLedger
   const [subCategoryFilter, setSubCategoryFilter] = useState("ALL");
   const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([]);
   const [subCategories, setSubCategories] = useState<Array<{ id: string; name: string; categoryId: string; categoryName: string }>>([]);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // Debounce timer for search
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
@@ -143,6 +144,13 @@ export function useLedgerData({ initialEntries = [], initialSummary }: UseLedger
     }
   }, [page, limit]);
 
+  // Fetch on manual refresh (no debounce, preserves filters and page)
+  useEffect(() => {
+    if (refreshKey > 0) {
+      fetchData();
+    }
+  }, [refreshKey]);
+
   const handleDateRangeChange = (newRange: DateRangeFilter) => {
     setDateRange(newRange);
     setPage(1);
@@ -166,6 +174,10 @@ export function useLedgerData({ initialEntries = [], initialSummary }: UseLedger
     setCategoryFilter("ALL");
     setSubCategoryFilter("ALL");
     setPage(1);
+  };
+
+  const refresh = () => {
+    setRefreshKey((prev) => prev + 1);
   };
 
   const hasActiveFilters =
@@ -217,5 +229,6 @@ export function useLedgerData({ initialEntries = [], initialSummary }: UseLedger
     changeLimit: setLimit,
     clearFilters,
     hasActiveFilters,
+    refresh,
   };
 }

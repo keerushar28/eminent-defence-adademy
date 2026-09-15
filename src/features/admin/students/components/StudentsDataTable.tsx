@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect } from "react"
 import {
   type ColumnDef,
   flexRender,
@@ -59,8 +60,13 @@ import SelectStudentButton from "../selected/components/SelectStudentButton"
 import { convertAdToBs } from "@/features/core/utils/convertAdToBs"
 import { printStudentRegistration, printMultipleStudentRegistrations } from "../utils/student-registration-print"
 import { Printer } from "lucide-react"
+import { type ExportOptions, type ExportColumn } from "@/lib/export-utils"
 
-export default function StudentsDataTable() {
+interface StudentsDataTableProps {
+  onExportOptionsChange?: (options: ExportOptions) => void
+}
+
+export default function StudentsDataTable({ onExportOptionsChange }: StudentsDataTableProps) {
   const router = useRouter();
   const pathname = usePathname();
 
@@ -449,6 +455,64 @@ export default function StudentsDataTable() {
     },
   })
   const { state } = useSidebar()
+
+  // Compute export options from visible columns and student data
+  useEffect(() => {
+    if (!onExportOptionsChange) return
+
+    const allExportColumns: ExportColumn[] = [
+      { header: "Full Name", key: "fullname", width: 25 },
+      { header: "Email", key: "email", width: 30 },
+      { header: "Registration Date", key: "createdAt", width: 20 },
+      { header: "DOB", key: "dob", width: 15 },
+      { header: "Gender", key: "gender", width: 12 },
+      { header: "Blood Group", key: "blood_group", width: 15 },
+      { header: "Categories", key: "studentCategories", width: 35 },
+      { header: "Student Phone", key: "contact_number_student", width: 18 },
+      { header: "Height", key: "height", width: 12 },
+      { header: "Qualifications", key: "qualifications", width: 25 },
+      { header: "Weight", key: "weight", width: 12 },
+      { header: "Parent Phone", key: "contact_number_parent", width: 18 },
+      { header: "Permanent Address", key: "permanent_address", width: 25 },
+      { header: "Temporary Address", key: "temporary_address", width: 25 },
+      { header: "Parent Name", key: "parentName", width: 20 },
+      { header: "Guardian Name", key: "guardianName", width: 20 },
+      { header: "Citizenship Number", key: "citizenship_number", width: 20 },
+    ]
+
+    const visibleColumns = allExportColumns.filter(
+      (col) => columnVisibility[col.key] !== false
+    )
+
+    const formatters: Record<string, (value: unknown, row: Record<string, unknown>) => string> = {
+      createdAt: (value) => convertAdToBs(value as string),
+      dob: (value) => convertAdToBs(value as string),
+      gender: (value) => String(value ?? "").toLowerCase(),
+      blood_group: (value) => String(value ?? "").replace("_", " "),
+      studentCategories: (value) => {
+        const cats = value as Array<{ subCategory?: { name: string; category?: { name: string } } }>
+        if (!cats || cats.length === 0) return "No categories"
+        return cats.map((sc) => `${sc.subCategory?.category?.name} - ${sc.subCategory?.name}`).join(", ")
+      },
+      height: (value, row) => `${value} ${row.heightUnit || "cm"}`,
+      weight: (value, row) => `${value} ${row.weightUnit || "kg"}`,
+      qualifications: (value) => {
+        const quals = value as string[] | undefined
+        if (!quals || quals.length === 0) return "-"
+        return quals.join(", ")
+      },
+    }
+
+    onExportOptionsChange({
+      fileName: "students-data",
+      sheetName: "Students",
+      title: "Students Management",
+      subtitle: `Exported on ${new Date().toLocaleDateString()}`,
+      columns: visibleColumns,
+      data: students as unknown as Record<string, unknown>[],
+      formatters,
+    })
+  }, [students, columnVisibility, onExportOptionsChange])
 
   const selectedRows = table.getSelectedRowModel().rows
   const selectedStudentIds = selectedRows.map(row => row.original.id)

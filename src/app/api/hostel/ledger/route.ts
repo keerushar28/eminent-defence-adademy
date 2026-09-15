@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/features/core/lib/prisma";
 import { Prisma } from "@prisma/client";
-import { calculateTotalPayableDays } from "@/features/admin/hostel/lib/calculations";
+import {
+  calculateTotalPayableDays,
+  calculatePendingDays,
+  calculatePendingAmount,
+} from "@/features/admin/hostel/lib/calculations";
 
 export const dynamic = "force-dynamic";
 
@@ -160,12 +164,14 @@ export async function GET(request: NextRequest) {
         // Calculate days paid
         const daysPaid = Math.floor(totalPaid / pricePerDay);
 
-        // Calculate balance (positive = overpaid, negative = pending)
-        const balance = totalPaid - amountConsumed;
+        // Calculate pending using paidUntil-based logic (consistent with Student Ledger)
+        const creditBalance = Number(allocation.creditBalance) || 0;
+        const pendingDays = calculatePendingDays(paidUntil, today, allocationDate);
+        let pendingAmount = calculatePendingAmount(pendingDays, pricePerDay);
+        pendingAmount = Math.max(0, pendingAmount - creditBalance);
 
-        // Calculate pending and overpaid amounts
-        const pendingAmount = balance < 0 ? Math.abs(balance) : 0;
-        const overpaidAmount = balance > 0 ? balance : 0;
+        // Overpaid is based on money paid exceeding the amount consumed
+        const overpaidAmount = totalPaid > amountConsumed ? totalPaid - amountConsumed : 0;
 
         // Determine status based on actual balance
         let calculatedStatus: PaymentStatus;

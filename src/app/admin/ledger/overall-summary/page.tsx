@@ -138,6 +138,18 @@ export default function OverallSummaryPage() {
                           <TableCell className="w-20 text-center">-</TableCell>
                         </TableRow>
                       )}
+                      {data.totals.totalExtraIncome > 0 && (
+                        <TableRow>
+                          <TableCell className="w-16 text-center">
+                            {data.categoryHierarchy.length + (data.totals.totalIssuancePayments > 0 ? 2 : 1)}
+                          </TableCell>
+                          <TableCell className="min-w-0">Receive from Extra Income</TableCell>
+                          <TableCell className="text-right font-mono w-32">
+                            {formatAmount(data.totals.totalExtraIncome)}
+                          </TableCell>
+                          <TableCell className="w-20 text-center">-</TableCell>
+                        </TableRow>
+                      )}
                       <TableRow className="font-semibold bg-muted/50 border-t-2">
                         <TableCell className="w-16" />
                         <TableCell className="font-bold min-w-0">Total Category Payment Receive</TableCell>

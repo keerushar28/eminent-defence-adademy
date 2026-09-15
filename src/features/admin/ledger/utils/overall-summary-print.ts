@@ -22,6 +22,7 @@ export interface OverallSummaryData {
     totalExpenditure: number;
     totalHostelReceive: number;
     totalIssuancePayments: number;
+    totalExtraIncome: number;
     totalReceive: number;
     remainingBalance: number;
   };
@@ -88,6 +89,11 @@ export function buildPrintHTML(
   });
   if (data.totals.totalIssuancePayments > 0) {
     receiveRows += row(String(idx), "Receive from Inventory Issuances", formatAmount(data.totals.totalIssuancePayments));
+    idx++;
+  }
+  if (data.totals.totalExtraIncome > 0) {
+    receiveRows += row(String(idx), "Receive from Extra Income", formatAmount(data.totals.totalExtraIncome));
+    idx++;
   }
   receiveRows += row("", "Total Category Payment Receive", formatAmount(data.totals.totalCategoryReceive), { bold: true, total: true });
 

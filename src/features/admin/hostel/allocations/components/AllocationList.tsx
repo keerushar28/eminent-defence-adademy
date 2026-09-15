@@ -34,14 +34,16 @@ import { useIsAdmin } from "../../hooks/useIsAdmin";
 import Pagination from "@/features/core/components/shared/pagination";
 import { useSidebar } from "@/features/core/components/sidebar";
 import { cn } from "@/features/core/lib/utils";
+import { type ExportOptions, type ExportColumn } from "@/lib/export-utils";
 
 interface AllocationListProps {
   allocations: Allocation[];
   onDeallocate: (allocation: Allocation) => void;
   onDelete: (allocation: Allocation) => void;
+  onExportOptionsChange?: (options: ExportOptions) => void;
 }
 
-export default function AllocationList({ allocations, onDeallocate, onDelete }: AllocationListProps) {
+export default function AllocationList({ allocations, onDeallocate, onDelete, onExportOptionsChange }: AllocationListProps) {
   const isAdmin = useIsAdmin();
   const { state } = useSidebar();
 
@@ -478,6 +480,65 @@ export default function AllocationList({ allocations, onDeallocate, onDelete }: 
     manualPagination: true,
     pageCount: totalPages,
   });
+
+  // Compute export options from visible columns and allocation data
+  useEffect(() => {
+    if (!onExportOptionsChange) return;
+
+    const allExportColumns: ExportColumn[] = [
+      { header: "Student Name", key: "studentName", width: 25 },
+      { header: "Student Email", key: "studentEmail", width: 30 },
+      { header: "Room", key: "roomNumber", width: 10 },
+      { header: "Bed", key: "bedNumber", width: 10 },
+      { header: "Allocation Date", key: "allocationDate", width: 18 },
+      { header: "Paid Until", key: "paidUntil", width: 18 },
+      { header: "Total Paid", key: "totalPaid", width: 15 },
+      { header: "Pending Fees", key: "pendingFees", width: 15 },
+      { header: "Overpaid", key: "overpaid", width: 15 },
+      { header: "Status", key: "status", width: 12 },
+    ];
+
+    const visibleColumns = allExportColumns.filter(
+      (col) => columnVisibility[col.key] !== false
+    );
+
+    const exportData = allocationsWithBilling.map((a) => ({
+      studentName: a.student?.fullname || "Unknown",
+      studentEmail: a.student?.email || "-",
+      roomNumber: a.bed?.room?.roomNumber || "N/A",
+      bedNumber: a.bed?.bedNumber || "N/A",
+      allocationDate: formatNepaliDateFromDate(new Date(a.allocationDate)),
+      paidUntil: formatNepaliDateFromDate(new Date(a.paidUntil)),
+      totalPaid: a.totalPaid,
+      pendingFees: a.pendingAmount > 0 ? a.pendingAmount - a.creditBalance : 0,
+      overpaid: a.overpaidAmount,
+      status: a.isActive ? "Active" : "Deallocated",
+    }));
+
+    // Compute summary totals
+    const visibleKeys = new Set(visibleColumns.map((col) => col.key));
+    const summaryRow: Record<string, string | number> = {};
+
+    if (visibleKeys.has("totalPaid")) {
+      summaryRow.totalPaid = exportData.reduce((sum, r) => sum + (r.totalPaid as number), 0);
+    }
+    if (visibleKeys.has("pendingFees")) {
+      summaryRow.pendingFees = exportData.reduce((sum, r) => sum + (r.pendingFees as number), 0);
+    }
+    if (visibleKeys.has("overpaid")) {
+      summaryRow.overpaid = exportData.reduce((sum, r) => sum + (r.overpaid as number), 0);
+    }
+
+    onExportOptionsChange({
+      fileName: "allocations-data",
+      sheetName: "Allocations",
+      title: "Student Allocations",
+      subtitle: `Exported on ${new Date().toLocaleDateString()}`,
+      columns: visibleColumns,
+      data: exportData,
+      ...(Object.keys(summaryRow).length > 0 && { summaryRow }),
+    });
+  }, [allocationsWithBilling, columnVisibility, onExportOptionsChange]);
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);

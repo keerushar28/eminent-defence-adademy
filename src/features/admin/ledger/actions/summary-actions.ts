@@ -193,11 +193,27 @@ export async function getOverallSummary(dateRange: DateRangeFilter) {
 
     const totalIssuancePayments = issuancePayments.reduce((sum, payment) => sum + Number(payment.amount), 0);
 
+    // 5. Extra / manual income entries from the ledger
+    const extraIncomeEntries = await prisma.ledgerEntry.findMany({
+      where: {
+        type: "INCOME",
+        category: "EXTRA_INCOME",
+        ...(dateFilter && {
+          recordedDate: {
+            gte: dateFilter.startDate,
+            lte: dateFilter.endDate,
+          },
+        }),
+      },
+    });
+
+    const totalExtraIncome = extraIncomeEntries.reduce((sum, entry) => sum + Number(entry.amount), 0);
+
     // Calculate totals
     const totalCategoryReceive = Object.values(categoryBreakdown).reduce((sum, val) => sum + val, 0);
     const totalExpenditure = Object.values(expenditureBreakdown).reduce((sum, val) => sum + val, 0);
     const totalHostelReceive = Object.values(hostelByCategory).reduce((sum, val) => sum + val, 0);
-    const totalReceive = totalCategoryReceive + totalHostelReceive + totalIssuancePayments;
+    const totalReceive = totalCategoryReceive + totalHostelReceive + totalIssuancePayments + totalExtraIncome;
     const remainingBalance = totalReceive - totalExpenditure;
 
     return {
@@ -233,6 +249,7 @@ export async function getOverallSummary(dateRange: DateRangeFilter) {
         totalExpenditure,
         totalHostelReceive,
         totalIssuancePayments,
+        totalExtraIncome,
         totalReceive,
         remainingBalance,
       },

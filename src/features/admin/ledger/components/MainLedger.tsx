@@ -1,16 +1,21 @@
 "use client";
 
+import { useState } from "react";
 import { Card, CardContent, CardTitle } from "@/features/core/components/card";
 import LedgerTable from "./LedgerTable";
 import SummaryCards from "./SummaryCards";
 import BreakdownCharts from "./BreakdownCharts";
 import FilterPanel from "./FilterPanel";
+import AddExtraIncomeDialog from "./AddExtraIncomeDialog";
 import Pagination from "@/features/core/components/shared/pagination";
 import { useLedgerData } from "../hooks/useLedgerData";
-import { Loader2 } from "lucide-react";
+import { Button } from "@/features/core/components/button";
+import { Loader2, Plus } from "lucide-react";
 import { formatNepaliDateFromDate } from "@/features/core/lib/nepali-date";
 
 export default function MainLedger() {
+  const [extraIncomeOpen, setExtraIncomeOpen] = useState(false);
+
   const {
     entries,
     summary,
@@ -37,6 +42,7 @@ export default function MainLedger() {
     changeLimit,
     clearFilters,
     hasActiveFilters,
+    refresh,
   } = useLedgerData({});
 
   const handleExport = () => {
@@ -136,6 +142,20 @@ export default function MainLedger() {
         hasActiveFilters={hasActiveFilters}
         loading={loading}
         onExport={handleExport}
+      />
+
+      {/* Add Extra Income */}
+      <div className="flex justify-end">
+        <Button onClick={() => setExtraIncomeOpen(true)} className="gap-2">
+          <Plus className="h-4 w-4" />
+          Add Extra Income
+        </Button>
+      </div>
+
+      <AddExtraIncomeDialog
+        isOpen={extraIncomeOpen}
+        onClose={() => setExtraIncomeOpen(false)}
+        onSuccess={refresh}
       />
 
       {/* Breakdown Charts */}

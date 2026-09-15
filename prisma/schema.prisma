@@ -343,16 +343,20 @@ model IssuancePayment {
 model LedgerEntry {
   id              String        @id @default(uuid())
   type            LedgerType    // INCOME, EXPENSE
-  category        String        // INVENTORY_ISSUANCE, HOSTEL_PAYMENT, CATEGORY_PAYMENT, etc.
+  category        String        // INVENTORY_ISSUANCE, HOSTEL_PAYMENT, CATEGORY_PAYMENT, EXTRA_INCOME, etc.
   description     String
   amount          Decimal       @db.Decimal(10, 2)
   paymentMethod   PaymentMethod @default(CASH)
   referenceNumber String?
   referenceId     String?       // Links to issuance, payment, etc.
-  referenceType   String?       // ISSUANCE_PAYMENT, HOSTEL_PAYMENT, etc.
+  referenceType   String?       // ISSUANCE_PAYMENT, HOSTEL_PAYMENT, EXTRA_INCOME, etc.
   recordedBy      String
   recordedDate    DateTime      @default(now())
   notes           String?
+  // 🔗 Buyer details for manual / extra income where the payer may be an insider or outsider
+  payerName       String?       // Name of the person who paid (for EXTRA_INCOME)
+  payerType       String?       // "INSIDER" | "OUTSIDER" (for EXTRA_INCOME)
+  payerContact    String?       // Contact / email of the payer (for EXTRA_INCOME)
   createdAt       DateTime      @default(now())
 
   @@index([type])
